@@ -10,8 +10,6 @@ const navItems = [
   { to: '/payrollcalendar', label: 'Payroll Calendar', icon: Calendar },
   { to: '/reports', label: 'Reports Analytics', icon: FileBarChart2 },
   { to: '/reportsdocuments', label: 'Reports & Documents', icon: FileText },
-  { to: '/profile', label: 'Profile', icon: User },
-  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {

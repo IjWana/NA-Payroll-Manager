@@ -18,7 +18,8 @@ import PayrollCalendar from './pages/PayrollCalendar.jsx';
 import Reports from './pages/Reports.jsx';
 import ReportsAndDocuments from './pages/ReportsAndDocuments.jsx';
 import Settings from './pages/Settings.jsx';
-import Profile from './pages/Profile.jsx';
+
+
 
 function PrivateRoute({ children }) {
   const { user } = useAuth();
@@ -58,7 +59,6 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/reportsdocuments" element={<ReportsAndDocuments />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="/profile" element={<Profile />} />
             </Route>
 
             {/* Fallback */}

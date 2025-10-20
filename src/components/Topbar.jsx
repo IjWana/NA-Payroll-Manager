@@ -1,5 +1,5 @@
-import { UserCircle2, Bell } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { UserCircle2, Bell, Settings2, LogOut } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSearch } from '../context/SearchContext.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../context/NotificationsContext.jsx';
@@ -11,12 +11,16 @@ export function Topbar(props) {
 
   // notifications from context
   const { notifications: items, unreadCount: unread, markAllRead, markRead } = useNotifications();
-  const { user } = useAuth() || {};
+  const { user, signOut } = useAuth() || {};
 
   // local UI state
   const [open, setOpen] = useState(false);
   const bellRef = useRef(null);
   const panelRef = useRef(null);
+  // User dropdown state/refs
+  const [userOpen, setUserOpen] = useState(false);
+  const userBtnRef = useRef(null);
+  const userMenuRef = useRef(null);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -34,6 +38,23 @@ export function Topbar(props) {
     };
   }, [open]);
 
+  // Close user dropdown on outside click/ESC
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!userOpen) return;
+      const b = userBtnRef.current;
+      const m = userMenuRef.current;
+      if (m && !m.contains(e.target) && b && !b.contains(e.target)) setUserOpen(false);
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') setUserOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [userOpen]);
+
   const segment = location.pathname.split('/').filter(Boolean)[0] || 'dashboard';
   const human = (s) => {
     const r = s.replace(/-/g, ' ');
@@ -45,6 +66,15 @@ export function Topbar(props) {
       : segment === 'staff'
       ? 'Our Staffs'
       : human(segment);
+
+  // handlers
+  const navigate = useNavigate();
+  const goSettings = () => { setUserOpen(false); navigate('/settings'); };
+  const handleLogout = () => {
+    try { signOut?.(); } catch {}
+    setUserOpen(false);
+    navigate('/');
+  };
 
   return (
     <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4">
@@ -153,11 +183,50 @@ export function Topbar(props) {
 
         {/* User */}
         <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-sm font-medium">{user?.name || 'Admin User'}</p>
-            <p className="text-xs text-gray-500">{user?.role || 'Payroll Officer'}</p>
+          <div className="relative">
+            <button
+              ref={userBtnRef}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={userOpen}
+              onClick={() => setUserOpen(o => !o)}
+              className="flex items-center gap-3 rounded-md px-2 py-1 hover:bg-gray-50"
+              title="User menu"
+            >
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-medium">{user?.name || 'Admin User'}</p>
+                <p className="text-xs text-gray-500">{user?.role || 'Payroll Officer'}</p>
+              </div>
+              <UserCircle2 size={32} className="text-gray-600" />
+            </button>
+
+            {userOpen && (
+              <div
+                ref={userMenuRef}
+                role="menu"
+                className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white shadow-lg"
+              >
+                <button
+                  type="button"
+                  onClick={goSettings}
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  <Settings2 size={14} className="text-gray-600" />
+                  Settings
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50"
+                >
+                  <LogOut size={14} />
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
-          <UserCircle2 size={32} className="text-gray-600" />
         </div>
       </div>
     </header>
