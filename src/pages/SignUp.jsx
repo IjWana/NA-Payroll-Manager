@@ -186,9 +186,15 @@ export default function SignUp() {
               onChange={handleChange}
               className="w-full text-sm rounded border px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-900">
               <option value="">Select department</option>
-              <option value="HR">HR</option>
-              <option value="Finance">Finance</option>
-              <option value="Operations">Operations</option>
+              <option value="HR">Medicine</option>
+              <option value="Finance">Law</option>
+              <option value="Operations">Drone Piloting</option>
+              <option value="Operations">Infantry</option>
+              <option value="Operations">Engineering</option>
+              <option value="Operations">Education</option>
+              <option value="Operations">Administration</option>
+              <option value="Operations">Finance</option>
+              <option value="Operations">Logistics</option>
               {/* Add more options as needed */}
             </select>
             {errors.department && (

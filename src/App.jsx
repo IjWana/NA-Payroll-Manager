@@ -3,26 +3,29 @@ import { Layout } from './components/Layout.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { StaffProvider } from './context/StaffContext.jsx';
 import { PayrollProvider } from './context/PayrollContext.jsx';
+import { NotificationsProvider } from './context/NotificationsContext.jsx';
+import { SearchProvider } from './context/SearchContext.jsx';
 import SignIn from './pages/SignIn.jsx';
 import SignUp from './pages/SignUp.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
-import {useAuth} from './context/AuthContext.jsx';
+import { useAuth } from './context/AuthContext.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import Staff from './pages/Staff.jsx';
+import Payroll from './pages/Payroll.jsx';
+import Payslip from './pages/Payslip.jsx';
+import Loans from './pages/Loans.jsx';
+import PayrollCalendar from './pages/PayrollCalendar.jsx';
+import Reports from './pages/Reports.jsx';
+import ReportsAndDocuments from './pages/ReportsAndDocuments.jsx';
+import Settings from './pages/Settings.jsx';
+import Profile from './pages/Profile.jsx';
 
-
-
-function PrivateRoute({children}){
-  const {user} = useAuth();
+function PrivateRoute({ children }) {
+  const { user } = useAuth();
   return user ? children : <Navigate to="/" replace />;
 }
 
-function Placeholder({ title }) {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-2">{title}</h1>
-      <p className="text-gray-600">Page content will be implemented soon.</p>
-    </div>
-  );
-}
+
 
 export default function App() {
   return (
@@ -30,25 +33,35 @@ export default function App() {
       <StaffProvider>
         <PayrollProvider>
           <Routes>
-            {/* Public Routes  */}
+            {/* Public */}
             <Route path="/" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
 
-            {/* Protected Routes  */}
-            <Route element={ <PrivateRoute><Layout /> </PrivateRoute>}>        
-              <Route path="/dashboard" element={<Placeholder title="Dashboard" />} />
-              <Route path="/staff" element={<Placeholder title="Staff" />} />
-              <Route path="/payroll" element={<Placeholder title="Payroll" />} />
-              <Route path="/payslip" element={<Placeholder title="Payslip" />} />
-              <Route path="/loans" element={<Placeholder title="Loans" />} />
-              <Route path="/payrollcalendar" element={<Placeholder title="Payroll Calendar" />} />
-              <Route path="/reports" element={<Placeholder title="Reports" />} />
-              <Route path="/reportsdocuments" element={<Placeholder title="Reports & Documents" />} />
-              <Route path="/settings" element={<Placeholder title="Settings" />} />
-              <Route path="/profile" element={<Placeholder title="Profile" />} />
+            {/* Protected (wrapped with Layout) */}
+            <Route
+              element={
+                <PrivateRoute>
+                  <NotificationsProvider>
+                    <SearchProvider>
+                      <Layout />
+                    </SearchProvider>
+                  </NotificationsProvider>
+                </PrivateRoute>
+              }
+            >
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/staff" element={<Staff />} />
+              <Route path="/payroll" element={<Payroll />} />
+              <Route path="/payslip" element={<Payslip />} />
+              <Route path="/loans" element={<Loans />} />
+              <Route path="/payrollcalendar" element={<PayrollCalendar />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/reportsdocuments" element={<ReportsAndDocuments />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
 
-            {/* Catch-all  */}
+            {/* Fallback */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </PayrollProvider>
