@@ -5,7 +5,7 @@ const StaffContext = createContext(null);
 const initial = [
   { id: 'NA0001', name: 'John Musa', rank: 'Private', grade: 'E1', department: 'Infantry', baseSalary: 80000 },
   { id: 'NA0002', name: 'Grace Okoro', rank: 'Sergeant', grade: 'E5', department: 'Signals', baseSalary: 145000 },
-  { id: 'NA0003', name: 'Bello Idris', rank: 'Captain', grade: 'O3', department: 'Logistics', baseSalary: 320000 },
+  // { id: 'NA0003', name: 'Bello Idris', rank: 'Captain', grade: 'O3', department: 'Logistics', baseSalary: 320000 },
 ];
 
 export function StaffProvider({ children }) {

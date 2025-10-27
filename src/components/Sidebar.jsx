@@ -1,15 +1,13 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Wallet, FileBarChart2, Settings, User, ReceiptTextIcon, SquareUserRound, Calendar, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, Wallet, FileBarChart2, FileStack } from 'lucide-react';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/staff', label: 'Staff', icon: Users },
+  { to: '/personnel', label: 'Personnel Management', icon: Users },
   { to: '/payroll', label: 'Payroll', icon: Wallet },
-  { to: '/payslip', label: 'Payslip', icon: ReceiptTextIcon },
-  { to: '/loans', label: 'Loans', icon: SquareUserRound },
-  { to: '/payrollcalendar', label: 'Payroll Calendar', icon: Calendar },
   { to: '/reports', label: 'Reports Analytics', icon: FileBarChart2 },
-  { to: '/reportsdocuments', label: 'Reports & Documents', icon: FileText },
+  { to: '/history', label: 'Payroll History', icon: FileStack },
+  
 ];
 
 export function Sidebar() {
@@ -25,8 +23,8 @@ export function Sidebar() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors border border-transparent ${
                     isActive
-                      ? 'bg-army-green/10 text-army-green border-army-green/20'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-army-green/50 text-army-green border-army-green/20'
+                      : 'text-black hover:bg-gray-200'
                   }`
                 }
               >

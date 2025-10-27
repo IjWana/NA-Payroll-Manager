@@ -1,11 +1,11 @@
-import { UserCircle2, Bell, Settings2, LogOut } from 'lucide-react';
+import { UserCircle2, Bell, LogOut } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSearch } from '../context/SearchContext.jsx';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNotifications } from '../context/NotificationsContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export function Topbar(props) {
+export function Topbar() {
   const location = useLocation();
   const { query, setQuery, clear } = useSearch();
 
@@ -55,6 +55,46 @@ export function Topbar(props) {
     };
   }, [userOpen]);
 
+  // Dynamic user info: pull from AuthContext, fallback to localStorage
+  const { displayName, role } = useMemo(() => {
+    // helpers
+    const safe = (v) => (typeof v === 'string' ? v : '');
+    const fromAuth = {
+      name: safe(user?.name || user?.fullName || user?.username || user?.email),
+      role: safe(user?.role) || 'Finance Officer',
+    };
+
+    // fallback from localStorage
+    let lsName = '';
+    let lsRole = 'Finance Officer';
+    try {
+      const raw = JSON.parse(localStorage.getItem('ps_auth') || '{}');
+      const u = raw?.user || {};
+      lsName = safe(u.name || u.fullName || u.username || u.email);
+      lsRole = safe(u.role) || lsRole;
+
+      // try to resolve fullName via ps_users if identifier was stored
+      if (lsName && (!lsName.includes(' ') || lsName === u.username || lsName === u.email)) {
+        const users = JSON.parse(localStorage.getItem('ps_users') || '[]');
+        const found = Array.isArray(users)
+          ? users.find(
+              (x) =>
+                safe(x.email).toLowerCase() === lsName.toLowerCase() ||
+                safe(x.username).toLowerCase() === lsName.toLowerCase()
+            )
+          : null;
+        if (found?.fullName) lsName = found.fullName;
+        if (found?.role) lsRole = found.role;
+      }
+    } catch {}
+
+    const finalName = fromAuth.name || lsName || 'Admin User';
+    const finalRole = fromAuth.role || lsRole || 'Finance Officer';
+    return { displayName: finalName, role: finalRole };
+  }, [user]);
+
+  const firstName = useMemo(() => displayName.split(' ').filter(Boolean)[0] || '', [displayName]);
+
   const segment = location.pathname.split('/').filter(Boolean)[0] || 'dashboard';
   const human = (s) => {
     const r = s.replace(/-/g, ' ');
@@ -63,15 +103,20 @@ export function Topbar(props) {
   const resolvedTitle =
     segment === 'dashboard'
       ? 'Dashboard Overview'
-      : segment === 'staff'
-      ? 'Our Staffs'
+      : segment === 'payroll'
+      ? 'Payroll Processing'
+      : segment === 'reports'
+      ? 'Reports'
+      : ['soldier', 'staff', 'staffs'].includes(segment)
+      ? 'Soldier Management'
       : human(segment);
 
   // handlers
   const navigate = useNavigate();
-  const goSettings = () => { setUserOpen(false); navigate('/settings'); };
+  
   const handleLogout = () => {
     try { signOut?.(); } catch {}
+    try { localStorage.removeItem('ps_auth'); } catch {}
     setUserOpen(false);
     navigate('/');
   };
@@ -82,7 +127,7 @@ export function Topbar(props) {
       <div className="flex items-center gap-4">
         <div>
           <p className="text-sm text-gray-500">
-            Welcome back{user?.name ? `, ${user.name.split(' ')[0]}` : ''},
+            Welcome back{firstName ? `, ${firstName}` : ''},
           </p>
           <h1 className="text-lg font-semibold text-gray-800">{resolvedTitle}</h1>
         </div>
@@ -194,8 +239,8 @@ export function Topbar(props) {
               title="User menu"
             >
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium">{user?.name || 'Admin User'}</p>
-                <p className="text-xs text-gray-500">{user?.role || 'Payroll Officer'}</p>
+                <p className="text-sm font-medium">{displayName}</p>
+                <p className="text-xs text-gray-500">{role}</p>
               </div>
               <UserCircle2 size={32} className="text-gray-600" />
             </button>
@@ -206,15 +251,7 @@ export function Topbar(props) {
                 role="menu"
                 className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white shadow-lg"
               >
-                <button
-                  type="button"
-                  onClick={goSettings}
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50"
-                >
-                  <Settings2 size={14} className="text-gray-600" />
-                  Settings
-                </button>
+                
                 <button
                   type="button"
                   onClick={handleLogout}

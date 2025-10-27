@@ -1,6 +1,15 @@
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { Users, Wallet2, PercentCircle, Download, Settings2, WalletIcon } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  Users,
+  Wallet2,
+  Download,
+  Settings2,
+  WalletIcon,
+  UserPlus,
+  PlayCircle,
+  FileText,
+} from 'lucide-react';
 import { usePayroll } from '../context/PayrollContext.jsx';
 import { useStaff } from '../context/StaffContext.jsx';
 import { useNotifications } from '../context/NotificationsContext.jsx';
@@ -13,22 +22,25 @@ function formatCurrency(n) {
     return '₦' + Number(n).toLocaleString();
   }
 }
-
 function initials(name = '') {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(s => s[0]?.toUpperCase())
-    .join('') || 'NA';
+  return name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || 'NA';
 }
 
-// Simple SVG bar chart with gradient + hatch pattern (static tooltip mimic)
+// Utility: load Reports count from storage
+function loadReportsCount() {
+  try {
+    const raw = localStorage.getItem('ps_docs');
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Simple SVG bar chart with gradient + hatch pattern (dynamic stacked)
 function ExpenseBars({ labels, series, highlightIndex = -1 }) {
   // series: [{ label, data: number[], color }]
-  const totalsByMonth = labels.map((_, i) =>
-    series.reduce((sum, s) => sum + (Number(s.data[i]) || 0), 0)
-  );
+  const totalsByMonth = labels.map((_, i) => series.reduce((sum, s) => sum + (Number(s.data[i]) || 0), 0));
   const max = Math.max(...totalsByMonth, 1);
 
   return (
@@ -44,7 +56,7 @@ function ExpenseBars({ labels, series, highlightIndex = -1 }) {
         const total = totalsByMonth[i];
         const isHighlight = i === highlightIndex;
 
-        // stacked segments from bottom up
+        // stacked segments bottom-up
         let cursorY = 190;
         const segments = series.map(s => {
           const val = Number(s.data[i]) || 0;
@@ -52,12 +64,10 @@ function ExpenseBars({ labels, series, highlightIndex = -1 }) {
           cursorY -= h;
           return { x, y: cursorY, h, color: s.color, label: s.label, val };
         });
-
         const topY = Math.min(...segments.map(s => s.y));
 
         return (
           <g key={m}>
-            {/* background hatched pillar for non-highlight months */}
             {!isHighlight && <rect x={x} y={30} width="20" height="160" rx="10" fill="url(#hatch)" />}
             {segments.map((seg, k) =>
               seg.h > 0 ? (
@@ -77,7 +87,6 @@ function ExpenseBars({ labels, series, highlightIndex = -1 }) {
               {m}
             </text>
 
-            {/* Tooltip for the highlighted month */}
             {isHighlight && total > 0 && (
               <g transform={`translate(${x - 10}, ${topY - 60})`}>
                 <rect x="0" y="0" width="160" height="60" rx="6" fill="#0f172a" opacity="0.95" />
@@ -103,23 +112,15 @@ function ExpenseBars({ labels, series, highlightIndex = -1 }) {
 }
 
 function percent(n, d) { return d ? Math.round((n / d) * 100) : 0; }
-
 function isRegularStaff(s) {
-  const t = String(
-    s?.employmentType ?? s?.type ?? s?.contractType ?? s?.category ?? s?.status ?? ''
-  ).toLowerCase();
+  const t = String(s?.employmentType ?? s?.type ?? s?.contractType ?? s?.category ?? s?.status ?? '').toLowerCase();
   return ['regular', 'full-time', 'permanent', 'employee', 'staff'].includes(t);
 }
-
 function guessRunDate(r) {
   let v = r?.periodDate ?? r?.date ?? r?.createdAt ?? r?.periodLabel ?? r?.period ?? r?.name;
   if (!v) return null;
   try {
-    if (typeof v === 'string') {
-      if (/^\d{4}-\d{2}$/.test(v)) v = `${v}-01`;
-      const d = new Date(v);
-      return isNaN(d) ? null : d;
-    }
+    if (typeof v === 'string') { if (/^\d{4}-\d{2}$/.test(v)) v = `${v}-01`; const d = new Date(v); return isNaN(d) ? null : d; }
     if (typeof v === 'number') return new Date(v);
   } catch {}
   return null;
@@ -127,72 +128,43 @@ function guessRunDate(r) {
 function isSameMonth(a, b) { return a && b && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear(); }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
+  // Guard: allow only authenticated users
+  useEffect(() => {
+    try {
+      const auth = JSON.parse(localStorage.getItem('ps_auth') || '{}');
+      if (!auth?.token) navigate('/login', { replace: true });
+    } catch {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
+
   const { runs } = usePayroll();
   const { staff } = useStaff();
   const { notifications } = useNotifications();
 
-  const latest = runs?.[0];
+  // Overview metrics
+  const totalStaff = staff?.length ?? 0; // Total Soldiers
+  const pendingAll = (runs || []).filter(r =>
+    ['pending', 'processing', 'in-progress', 'in progress'].includes(String(r?.status || '').toLowerCase())
+  ).length;
 
-  // Dynamic footnote data
-  const totalStaff = staff?.length ?? 0;
+  // Total Processed Allowance (from completed runs)
+  const processedAllowances = (runs || []).reduce((sum, r) => {
+    const completed = String(r?.status || '').toLowerCase() === 'completed';
+    if (!completed) return sum;
+    const allowances = Number(r?.totals?.allowances ?? r?.totals?.bonus ?? r?.totals?.bonuses ?? 0);
+    return sum + (Number.isFinite(allowances) ? allowances : 0);
+  }, 0);
+
+  // Reports count (from local storage)
+  const reportsCount = loadReportsCount();
+
   const regularCount = (staff || []).filter(isRegularStaff).length;
   const regularPct = percent(regularCount, totalStaff);
 
-  const now = new Date();
-  const runsThisMonth = (runs || []).filter(r => {
-    const d = guessRunDate(r);
-    return d ? isSameMonth(d, now) : false;
-  });
-  const baseRuns = runsThisMonth.length ? runsThisMonth : (runs || []);
-  const completedCount = baseRuns.filter(r => String(r?.status || '').toLowerCase() === 'completed').length;
-  const pendingCount = baseRuns.filter(r => ['pending', 'processing', 'in-progress', 'in progress']
-    .includes(String(r?.status || '').toLowerCase())).length;
-  const completedPct = percent(completedCount, baseRuns.length);
-
-  const gross = Number(latest?.totals?.gross ?? 0);
-  const deductions = Number(latest?.totals?.deductions ?? 0);
-  const deductionsPct = gross > 0 ? percent(deductions, gross) : null;
-
-  const metrics = [
-    {
-      label: 'Total Staffs',
-      value: totalStaff,
-      footnote: totalStaff ? `${regularPct}% are regular staff` : '—',
-      tone: 'bg-emerald-50 text-emerald-700',
-      iconBg: 'bg-emerald-500 text-emerald-700',
-      Icon: Users,
-      bg: 'bg-emerald-100 border-emerald-100',
-    },
-    {
-      label: 'Payroll Processed',
-      value: latest ? formatCurrency(latest?.totals?.gross) : '—',
-      footnote: baseRuns.length ? `${completedPct}% completed ${runsThisMonth.length ? 'this month' : 'overall'}` : '—',
-      tone: 'bg-amber-50 text-amber-700',
-      iconBg: 'bg-amber-500 text-amber-700',
-      Icon: WalletIcon,
-      bg: 'bg-amber-100 border-amber-100',
-    },
-    {
-      label: 'Pending payment',
-      value: latest ? formatCurrency(latest?.totals?.net) : '—',
-      footnote: baseRuns.length ? `${pendingCount} run${pendingCount === 1 ? '' : 's'} pending ${runsThisMonth.length ? 'this month' : 'overall'}` : '—',
-      tone: 'bg-indigo-50 text-indigo-700',
-      iconBg: 'bg-indigo-500 text-indigo-700',
-      Icon: Wallet2,
-      bg: 'bg-indigo-100 border-indigo-100',
-    },
-    {
-      label: 'Loans and Tax Deduction',
-      value: latest ? formatCurrency(deductions) : '—',
-      footnote: deductionsPct != null ? `${deductionsPct}% of gross in latest run` : '—',
-      tone: 'bg-rose-50 text-rose-700',
-      iconBg: 'bg-rose-500 text-rose-700',
-      Icon: PercentCircle,
-      bg: 'bg-rose-100 border-rose-100',
-    },
-  ];
-
-  // Dynamic monthly stacked breakdown from runs
+  // Breakdown series (unchanged)
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep'];
   const { baseSeries, allowSeries, arrearsSeries, hiIndex } = useMemo(() => {
     const count = months.length;
@@ -203,7 +175,7 @@ export default function Dashboard() {
     (runs || []).forEach(r => {
       const d = guessRunDate(r);
       if (!d) return;
-      const idx = d.getMonth(); // 0-11
+      const idx = d.getMonth();
       if (idx < 0 || idx >= count) return;
 
       const gross = Number(r?.totals?.gross ?? 0);
@@ -219,16 +191,55 @@ export default function Dashboard() {
     const totals = months.map((_, i) => base[i] + allow[i] + arrears[i]);
     const maxVal = Math.max(...totals, 0);
     const hi = maxVal > 0 ? totals.indexOf(maxVal) : -1;
-
     return { baseSeries: base, allowSeries: allow, arrearsSeries: arrears, hiIndex: hi };
   }, [runs]);
 
-  const recentNotifs = (notifications || []).slice(0, 5);
+  // Recent activities from notifications
+  const recent = (notifications || []).slice(0, 6);
+
+  // Overview cards
+  const metrics = [
+    {
+      label: 'Total Soldiers',
+      value: totalStaff,
+      footnote: totalStaff ? `${regularPct}% regular` : '—',
+      tone: 'bg-emerald-50 text-emerald-700',
+      iconBg: 'bg-emerald-600 text-white',
+      Icon: Users,
+      bg: 'bg-emerald-100 border-emerald-100',
+    },
+    {
+      label: 'Pending Payrolls',
+      value: pendingAll,
+      footnote: pendingAll ? 'awaiting processing' : 'none pending',
+      tone: 'bg-amber-50 text-amber-700',
+      iconBg: 'bg-amber-600 text-white',
+      Icon: Wallet2,
+      bg: 'bg-amber-100 border-amber-100',
+    },
+    {
+      label: 'Total Processed Allowance',
+      value: formatCurrency(processedAllowances),
+      footnote: 'completed runs',
+      tone: 'bg-indigo-50 text-indigo-700',
+      iconBg: 'bg-indigo-600 text-white',
+      Icon: WalletIcon,
+      bg: 'bg-indigo-100 border-indigo-100',
+    },
+    {
+      label: 'Reports',
+      value: reportsCount,
+      footnote: 'reports & documents',
+      tone: 'bg-violet-50 text-violet-700',
+      iconBg: 'bg-violet-600 text-white',
+      Icon: FileText,
+      bg: 'bg-violet-100 border-violet-100',
+    },
+  ];
 
   return (
     <div className="space-y-6">
-
-      {/* Top metrics */}
+      {/* Overview cards */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map(({ label, value, footnote, tone, iconBg, Icon, bg }) => (
           <div key={label} className={`rounded-lg ${bg} p-4`}>
@@ -236,24 +247,47 @@ export default function Dashboard() {
               <div className={`h-8 w-8 rounded-md flex items-center justify-center ${iconBg}`}>
                 <Icon size={16} />
               </div>
-              <div className="mt-2 text-xs text-gray-500">{label}</div>
+              <div className="mt-2 text-sm text-black">{label}</div>
             </div>
             <div className="mt-3 text-2xl font-semibold">{value}</div>
-            <div className={`mt-2 inline-flex items-center rounded px-2 py-1 text-[11px] ${tone}`}>
-              {footnote}
-            </div>
+            <div className={`mt-2 inline-flex items-center rounded px-2 py-1 text-[11px] ${tone}`}>{footnote}</div>
           </div>
         ))}
       </div>
 
-      {/* Middle: Expense breakdown + Chat updates */}
+      {/* Quick navigation */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          to="/soldier"
+          className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm hover:bg-gray-50"
+          title="Add Soldier"
+        >
+          <UserPlus size={16} /> Add Personnel
+        </Link>
+        <Link
+          to="/payroll"
+          className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm hover:bg-gray-50"
+          title="Generate Payroll"
+        >
+          <PlayCircle size={16} /> Generate Payroll
+        </Link>
+        <Link
+          to="/reports"
+          className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm hover:bg-gray-50"
+          title="View Reports"
+        >
+          <FileText size={16} /> View Reports
+        </Link>
+      </div>
+
+      {/* Middle: Expense breakdown + Recent activities */}
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
         {/* Expense breakdown (spans 2 cols) */}
         <div className="rounded-lg border border-gray-200 bg-white p-4 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-gray-800">Payroll Expense Breakdown</h3>
-              <p className="text-xs text-gray-500">Here is a graph of payroll expenses breakdown</p>
+              <h3 className="text-sm font-medium text-black">Payroll Expense Breakdown</h3>
+              <p className="text-xs textblack">Real‑time monthly breakdown</p>
             </div>
             <div className="flex items-center gap-2">
               <button className="rounded-md border p-2 hover:bg-gray-50" title="Download">
@@ -277,12 +311,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Chat updates */}
+        {/* Recent activities */}
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-gray-800">Chat Updates</h3>
-              <p className="text-xs text-gray-500">Here are all the updates of chat</p>
+              <h3 className="text-sm font-medium text-black">Recent Activities</h3>
+              <p className="text-xs text-black">Latest updates and actions</p>
             </div>
             <Link to="/notifications" className="text-xs text-indigo-600 hover:underline">
               See All
@@ -290,12 +324,11 @@ export default function Dashboard() {
           </div>
 
           <ul className="mt-3 space-y-3">
-            {recentNotifs.length === 0 ? (
-              <li className="text-sm text-gray-500">No recent messages</li>
+            {recent.length === 0 ? (
+              <li className="text-sm text-black">No recent activity</li>
             ) : (
-              recentNotifs.map(n => (
+              recent.map(n => (
                 <li key={n.id} className="flex items-start gap-3">
-                  {/* Avatar or initials */}
                   {n.avatarUrl ? (
                     <img src={n.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                   ) : (

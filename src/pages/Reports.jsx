@@ -1,13 +1,28 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  BadgeDollarSign,
+
   Timer,
   CheckCircle2,
   AlertOctagon,
   Download,
   WalletCardsIcon,
+  Filter,
+  FileDown,
 } from 'lucide-react';
 import { usePayroll } from '../context/PayrollContext.jsx';
+
+const RUNS_KEY = 'ps_runs';
+
+function loadRunsFallback() {
+  try {
+    const raw = localStorage.getItem(RUNS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
 
 function formatCurrency(n) {
   const v = Number(n ?? 0);
@@ -40,8 +55,13 @@ function guessRunDate(r) {
 function monthKey(d) {
   return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : '';
 }
-function monthLabel(d) {
-  return d ? d.toLocaleString(undefined, { month: 'short' }) : '';
+function monthLabel(dOrKey) {
+  if (!dOrKey) return '';
+  if (typeof dOrKey === 'string' && /^\d{4}-\d{2}$/.test(dOrKey)) {
+    const [y, m] = dOrKey.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleString(undefined, { month: 'short', year: 'numeric' });
+  }
+  return dOrKey.toLocaleString(undefined, { month: 'short', year: 'numeric' });
 }
 function pick(val, ...keys) {
   for (const k of keys) {
@@ -50,8 +70,6 @@ function pick(val, ...keys) {
   }
   return undefined;
 }
-
-// Normalize entries from a run (for department sums)
 function getEntries(run) {
   const list =
     run?.entries ||
@@ -113,7 +131,6 @@ function ExpenseBars({ data, labels, highlightIndex = 2 }) {
 
 // Donut chart by department
 function DonutChart({ items, total, centerLabel }) {
-  // items: [{label, value, color}]
   const r = 60;
   const c = 2 * Math.PI * r;
   let acc = 0;
@@ -165,26 +182,54 @@ function DonutChart({ items, total, centerLabel }) {
 }
 
 export default function Reports() {
-  const { runs = [] } = usePayroll();
+  const navigate = useNavigate();
+  // Auth gate
+  useEffect(() => {
+    try {
+      const auth = JSON.parse(localStorage.getItem('ps_auth') || '{}');
+      if (!auth?.token) navigate('/login', { replace: true });
+    } catch {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
 
-  const latest = runs[0];
+  // Data source (context or localStorage fallback)
+  const { runs: ctxRuns = [] } = usePayroll?.() || { runs: [] };
+  const runs = ctxRuns.length ? ctxRuns : loadRunsFallback();
+
+  // Filter options (month and status)
+  const monthOptions = useMemo(() => {
+    const set = new Set(runs.map(r => monthKey(guessRunDate(r))).filter(Boolean));
+    return ['all', ...Array.from(set).sort().reverse()];
+  }, [runs]);
+  const [month, setMonth] = useState('all');
+  const [status, setStatus] = useState('all'); // all | completed | pending | failed
+
+  const filtered = useMemo(() => {
+    const byMonth = month === 'all' ? runs : runs.filter(r => monthKey(guessRunDate(r)) === month);
+    if (status === 'all') return byMonth;
+    return byMonth.filter(r => String(r?.status || '').toLowerCase().includes(status));
+  }, [runs, month, status]);
+
+  // KPIs
+  const latest = filtered[0] || runs[0];
   const totalsLatest = latest?.totals || {};
   const processedTotal = Number(totalsLatest.net ?? totalsLatest.gross ?? 0);
 
-  // KPI metrics from runs
-  const runStatuses = runs.map(r => String(r?.status || '').toLowerCase());
+  const runStatuses = filtered.map(r => String(r?.status || '').toLowerCase());
   const completedRuns = runStatuses.filter(s => s.includes('complete')).length;
   const failedRuns = runStatuses.filter(s => s.includes('fail')).length;
-  const onTimeRate = percent(completedRuns, runs.length);
-  const errorRate = percent(failedRuns, runs.length);
+  const onTimeRate = percent(completedRuns, filtered.length || runs.length || 0);
+  const errorRate = percent(failedRuns, filtered.length || runs.length || 0);
 
-  // Payslip accuracy (issued vs total from latest run entries if available)
+  // Latest entries for donut
   const entriesLatest = useMemo(() => (latest ? getEntries(latest) : []), [latest]);
+
   const payslipIssued =
     (latest?.entries || latest?.payslips || latest?.rows || [])
       .filter(e => {
         const raw = String(pick(e, 'payslipStatus', 'slipStatus', 'status') ?? '').toLowerCase();
-        const issuedFlag = e.payslipIssued ?? e.issued ?? e.slipIssued;
+        const issuedFlag = e?.payslipIssued ?? e?.issued ?? e?.slipIssued;
         return raw.includes('issued') || (!!issuedFlag && raw !== 'not issued');
       }).length;
   const payslipAccuracy = entriesLatest.length ? percent(payslipIssued, entriesLatest.length) : onTimeRate;
@@ -193,7 +238,7 @@ export default function Reports() {
     {
       label: 'Total payment processed',
       value: processedTotal ? formatCurrency(processedTotal) : '—',
-      foot: runs.length ? `${percent(completedRuns, runs.length)}% completed for this month` : '—',
+      foot: filtered.length ? `${percent(completedRuns, filtered.length)}% completed` : '—',
       bg: 'bg-amber-100 border-amber-100',
       iconBg: 'bg-amber-500 text-amber-700',
       Icon: WalletCardsIcon,
@@ -201,7 +246,7 @@ export default function Reports() {
     {
       label: 'Payroll on time rate',
       value: `${onTimeRate}%`,
-      foot: runs.length ? 'Based on completed runs' : '—',
+      foot: filtered.length ? 'Based on completed runs' : '—',
       bg: 'bg-indigo-100 border-indigo-100',
       iconBg: 'bg-indigo-500 text-indigo-700',
       Icon: Timer,
@@ -209,7 +254,7 @@ export default function Reports() {
     {
       label: 'Payslip Accuracy',
       value: `${payslipAccuracy}%`,
-      foot: entriesLatest.length ? 'Payslips generated and sent correctly' : '—',
+      foot: entriesLatest.length ? 'Payslips generated and sent' : '—',
       bg: 'bg-emerald-100 border-emerald-100',
       iconBg: 'bg-emerald-500 text-emerald-700',
       Icon: CheckCircle2,
@@ -217,14 +262,14 @@ export default function Reports() {
     {
       label: 'Payroll error Rate',
       value: `${errorRate}%`,
-      foot: 'Percentage of payroll transactions with Error',
+      foot: 'Share of runs with errors',
       bg: 'bg-rose-100 border-rose-100',
       iconBg: 'bg-rose-500 text-rose-700',
       Icon: AlertOctagon,
     },
   ];
 
-  // Monthly expense series (use net totals grouped by month)
+  // Monthly expense (net/gross totals grouped by month)
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const monthlySeries = useMemo(() => {
     if (!runs.length) return months.slice(0, 9).map(() => 0);
@@ -235,20 +280,14 @@ export default function Reports() {
       const val = Number(r?.totals?.net ?? r?.totals?.gross ?? 0);
       map.set(key, (map.get(key) || 0) + val);
     });
-    // take Jan–Sep or the first 9 labels of the year with data
-    const byMonth = months.slice(0, 9).map((m, idx) => {
-      const year = new Date().getFullYear();
-      const key = `${year}-${String(idx + 1).padStart(2, 0)}`;
-      return map.get(key) || 0;
-    });
-    return byMonth;
+    const year = new Date().getFullYear();
+    return months.slice(0, 9).map((_, idx) => map.get(`${year}-${String(idx + 1).padStart(2, '0')}`) || 0);
   }, [runs]);
 
-  // Department donut from latest run
+  // Department donut from latest
   const deptAgg = useMemo(() => {
     const agg = new Map();
     entriesLatest.forEach(e => agg.set(e.department, (agg.get(e.department) || 0) + (e.amount || 0)));
-    // fallback demo colors; order by value desc and take top 1006
     const palette = ['#f59e0b', '#6366f1', '#22c55e', '#ef4444', '#a855f7', '#8b5cf6'];
     const sorted = Array.from(agg.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
     const items = sorted.map(([label, value], i) => ({ label, value, color: palette[i % palette.length] }));
@@ -256,24 +295,92 @@ export default function Reports() {
     return { items, total };
   }, [entriesLatest]);
 
-  // Bottom quick stats
+  // Helpers: downloads
+  const downloadJSON = (obj, filename) => {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportCSV = () => {
+    const header = ['period', 'status', 'total', 'entries'];
+    const rows = filtered.map(r => {
+      const total = Number(r?.totals?.net ?? r?.totals?.gross ?? 0);
+      const entries = (r?.entries || r?.rows || r?.payslips || []).length;
+      return [monthLabel(monthKey(guessRunDate(r))), r.status, total, entries];
+    });
+    const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'payroll_reports.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const totalPayrollAmount = monthlySeries.reduce((s, v) => s + v, 0);
-  const highest = useMemo(() => {
-    if (!deptAgg.items.length) return null;
-    const top = [...deptAgg.items].sort((a, b) => b.value - a.value)[0];
-    const pct = percent(top.value, deptAgg.total);
-    return { label: top.label, pct };
-  }, [deptAgg]);
-  const lowest = useMemo(() => {
-    if (!deptAgg.items.length) return null;
-    const nonZero = deptAgg.items.filter(i => i.value > 0);
-    const bot = (nonZero.length ? nonZero : deptAgg.items).sort((a, b) => a.value - b.value)[0];
-    const pct = percent(bot.value, deptAgg.total);
-    return { label: bot.label, pct };
-  }, [deptAgg]);
 
   return (
     <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-black">Historical payroll summaries, KPIs, and visualizations.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex items-center gap-2 rounded-md border px-2 py-1.5">
+            <Filter size={14} className="text-gray-500" />
+            <select
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="text-sm outline-none bg-transparent"
+              title="Filter by month"
+            >
+              {monthOptions.map(m => (
+                <option key={m} value={m}>
+                  {m === 'all' ? 'All months' : monthLabel(m)}
+                </option>
+              ))}
+            </select>
+            <span className="text-gray-300">|</span>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="text-sm outline-none bg-transparent"
+              title="Filter by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => latest && downloadJSON(latest, `payroll_${monthLabel(month || monthKey(guessRunDate(latest))).replace(/\s+/g,'_')}.json`)}
+            disabled={!latest}
+            className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-60"
+            title="Download latest report (JSON)"
+          >
+            <Download size={16} /> Download
+          </button>
+          <button
+            type="button"
+            onClick={exportCSV}
+            disabled={!filtered.length}
+            className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-60"
+            title="Export CSV"
+          >
+            <FileDown size={16} /> Export CSV
+          </button>
+        </div>
+      </div>
+
       {/* KPI cards */}
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-4">
         {kpiCards.map(({ label, value, foot, bg, iconBg, Icon }) => (
@@ -282,7 +389,7 @@ export default function Reports() {
               <div className={`h-8 w-8 rounded-md ${iconBg} flex items-center justify-center`}>
                 <Icon size={18} />
               </div>
-              <div className="mt-2 text-xs text-gray-500">{label}</div>
+              <div className="mt-2 text-sm text-black">{label}</div>
               <div className="mt-3 text-2xl font-semibold">{value}</div>
               <div className="mt-2 inline-flex items-center rounded px-2 py-1 text-[11px] bg-white/50 text-gray-700">
                 {foot}
@@ -298,36 +405,29 @@ export default function Reports() {
         <div className="xl:col-span-2 rounded-lg border border-gray-200 bg-white p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-medium text-gray-800">Payroll Expense Breakdown</h3>
-              <p className="text-xs text-gray-500">Here is a graph of payroll expenses breakdown</p>
+              <h3 className="text-sm font-medium text-black">Payroll Expense Breakdown</h3>
+              <p className="text-xs text-black">Monthly totals based on history</p>
             </div>
-            <button className="rounded-md border p-2 hover:bg-gray-50" title="Download">
+            <button className="rounded-md border p-2 hover:bg-gray-50" title="Download image">
               <Download size={16} />
             </button>
           </div>
           <div className="mt-4">
-            <ExpenseBars data={monthlySeries} labels={months.slice(0, 9)} />
+            <ExpenseBars data={monthlySeries} labels={['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep']} />
           </div>
 
-          {/* Moved summary tiles here to align under the breakdown */}
           <div className="mt-6 grid gap-4 grid-cols-1 md:grid-cols-3">
             <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="text-xs text-gray-500">Total payroll Amount</div>
+              <div className="text-sm text-black">Total payroll Amount</div>
               <div className="mt-2 text-lg font-semibold text-emerald-700">{formatCurrency(totalPayrollAmount)}</div>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="text-xs text-gray-500">Highest-paid department</div>
-              <div className="mt-2 text-sm">
-                {highest ? <span className="font-semibold text-gray-800">{highest.label}</span> : '—'}{' '}
-                <span className="text-emerald-700">({highest ? `${highest.pct}%` : '—'})</span>
-              </div>
+              <div className="text-sm text-black">Completed runs</div>
+              <div className="mt-2 text-lg font-semibold text-gray-800">{completedRuns}</div>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="text-xs text-gray-500">Lowest-paid department</div>
-              <div className="mt-2 text-sm">
-                {lowest ? <span className="font-semibold text-gray-800">{lowest.label}</span> : '—'}{' '}
-                <span className="text-rose-700">({lowest ? `${lowest.pct}%` : '—'})</span>
-              </div>
+              <div className="text-sm text-black">Runs with errors</div>
+              <div className="mt-2 text-lg font-semibold text-rose-700">{failedRuns}</div>
             </div>
           </div>
         </div>
@@ -335,14 +435,12 @@ export default function Reports() {
         {/* Salary Pie Chart (right) */}
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <div className="mb-2">
-            <h3 className="text-sm font-medium text-gray-800">Salary Pie Chart</h3>
-            <p className="text-xs text-gray-500">This is the Chart for Department Salary</p>
+            <h3 className="text-sm font-medium text-gray-800">Salary by Department</h3>
+            <p className="text-xs text-black">From latest approved payroll</p>
           </div>
           <DonutChart items={deptAgg.items} total={deptAgg.total} centerLabel="Total" />
         </div>
       </div>
-
-      {/* Removed separate bottom summary tiles (now shown under the breakdown) */}
     </div>
   );
 }

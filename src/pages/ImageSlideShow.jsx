@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 
 const images = [
- "/images/Frame1.svg"
-//   "/images/Frame2.svg",
-//  "/images/Frame3.svg",
-//  "/images/Frame4.svg",
-//  "/images/Frame5.svg"
+  "/images/pmk.jpg",
+  "/images/MajAllen.jpeg",
+  "/images/Portrait.jpg",
+  "/images/E_Ali.jpg",
+  "/images/Achonu.jpeg",
+
 ];
 
 const ImageSlideshow = () => {
@@ -22,7 +23,7 @@ const ImageSlideshow = () => {
   }, []);
 
   return (
-    <div className=" w-96 h-full flex items-center justify-center rounded overflow-hidden bg-gray-100">
+    <div className=" w-full max-w-sm h-full flex items-center justify-center rounded overflow-hidden bg-gray-100">
       <img
         src={images[currentIndex]}
         alt={`Slide ${currentIndex + 1}`}
