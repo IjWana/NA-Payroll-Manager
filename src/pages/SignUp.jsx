@@ -120,7 +120,7 @@ export default function SignUp() {
               />
               <button
                 type="button"
-                onClick={() => setVisible1(s => !s)}
+                onClick={() => setVisible1(!visible1)}
                 className="absolute right-3 bottom-3 text-gray-500 hover:text-gray-700"
                 aria-label={visible1 ? "Hide password" : "Show password"}
               >

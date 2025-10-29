@@ -1,11 +1,11 @@
 from flask import Flask
 from flask_cors import CORS
-from auth import auth_bp
+from .auth import auth_bp
 from flask_jwt_extended import JWTManager
 from flask_pymongo import PyMongo
 import os
 from dotenv import load_dotenv
-from database import init_app
+# from server.models.database import init_app
 
 
 
@@ -51,7 +51,7 @@ def create_app():
     return app
 
 
-app = create_app()
+# app = create_app()
 
 
 

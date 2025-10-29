@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
-from database import mongo
+from models.database import mongo
 
 auth_bp = Blueprint("auth", __name__)
 
-# ✅ Signup
+# Signup
 @auth_bp.route("/signup", methods=["POST"])
 def signup():
     data = request.json
@@ -23,7 +23,7 @@ def signup():
     return jsonify({"message": "User registered successfully"}), 201
 
 
-# ✅ Login
+# Login
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.json
