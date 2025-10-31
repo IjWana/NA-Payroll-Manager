@@ -32,8 +32,8 @@ export default function App() {
         <PayrollProvider>
           <Routes>
             {/* Public */}
-            <Route path="/" element={<Login />} />
-            <Route path="/signup" element={<SignUp />} />
+            <Route path="/" element={<SignUp />} />
+            <Route path="/login" element={<Login />} />
 
             {/* Protected (wrapped with Layout) */}
             <Route

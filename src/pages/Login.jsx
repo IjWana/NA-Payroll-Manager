@@ -3,6 +3,8 @@ import { Eye, EyeOff, ArrowUpRight, Loader2 } from "lucide-react";
 import ImageSlideshow from "./ImageSlideShow";
 import { useNavigate } from "react-router-dom";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+
 export default function Login() {
   const navigate = useNavigate();
   const [identifier, setIdentifier] = useState(""); // email or username
@@ -33,16 +35,20 @@ export default function Login() {
 
     try {
       setLoading(true);
-      // TODO: Replace with real API call
-      // const res = await api.post('/auth/login', { identifier, password });
-      // save token/user in storage/context here
-      localStorage.setItem(
-        "ps_auth",
-        JSON.stringify({ token: "demo-token", user: { name: identifier } })
-      );
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({email: identifier.trim().toLowerCase(), password,}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error || "Invalid credentials. Please try again.");
+        return;
+      }
+      localStorage.setItem("ps_auth", JSON.stringify({ token: data.token, user: data.user }));
       navigate("/dashboard", { replace: true });
-    } catch (err) {
-      setError("Invalid credentials. Please try again.");
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -55,7 +61,7 @@ export default function Login() {
 
         <div className="flex flex-col justify-center flex-1 space-y-3">
           <div className="flex flex-col gap-2 mb-2 items-start">
-            <img src="/Icons/NAFC_Logo.svg" alt="NAFC Logo" className="h-20" />
+            <img src="/images/nafclogo.png" alt="NAFC Logo" className="h-20" />
           </div>
 
           <h2 className="text-2xl text-gray-800">Login</h2>
@@ -71,7 +77,7 @@ export default function Login() {
               <input
                 id="identifier"
                 type="text"
-                placeholder="e.g. majpmk@army.mil.ng or PMKokowa"
+                placeholder="e.g. majpmk@army.mil.ng or pmkokowa"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value.trim())}
                 className="w-full py-2 px-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-900 focus:outline-none"

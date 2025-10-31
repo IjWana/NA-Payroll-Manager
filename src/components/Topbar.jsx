@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNotifications } from '../context/NotificationsContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const API_BASE = import.meta.env?.VITE_API_BASE || 'http://localhost:5000/api';
+
 export function Topbar() {
   const location = useLocation();
   const { query, setQuery, clear } = useSearch();
@@ -21,6 +23,30 @@ export function Topbar() {
   const [userOpen, setUserOpen] = useState(false);
   const userBtnRef = useRef(null);
   const userMenuRef = useRef(null);
+
+  // cache user from API (/auth/me) if not in context/localStorage
+  const [cachedUser, setCachedUser] = useState(null);
+  useEffect(() => {
+    // If context already has user or localStorage has a user name, skip fetch
+    const ls = (() => {
+      try { return JSON.parse(localStorage.getItem('ps_auth') || '{}'); } catch { return {}; }
+    })();
+    const hasName =
+      user?.name || user?.fullName || ls?.user?.name || ls?.user?.fullName || ls?.user?.username || ls?.user?.email;
+    if (hasName) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+        if (!res.ok) return;
+        const me = await res.json();
+        if (!alive) return;
+        setCachedUser(me);
+        try { localStorage.setItem('ps_auth', JSON.stringify({ user: me })); } catch {}
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, [user]);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -55,13 +81,16 @@ export function Topbar() {
     };
   }, [userOpen]);
 
-  // Dynamic user info: pull from AuthContext, fallback to localStorage
+  // Dynamic user info: pull from AuthContext, cached /auth/me, fallback to localStorage
   const { displayName, role } = useMemo(() => {
-    // helpers
     const safe = (v) => (typeof v === 'string' ? v : '');
     const fromAuth = {
       name: safe(user?.name || user?.fullName || user?.username || user?.email),
-      role: safe(user?.role) || 'Finance Officer',
+      role: safe(user?.role) || '',
+    };
+    const fromCached = {
+      name: safe(cachedUser?.name || cachedUser?.fullName || cachedUser?.username || cachedUser?.email),
+      role: safe(cachedUser?.role) || '',
     };
 
     // fallback from localStorage
@@ -72,26 +101,12 @@ export function Topbar() {
       const u = raw?.user || {};
       lsName = safe(u.name || u.fullName || u.username || u.email);
       lsRole = safe(u.role) || lsRole;
-
-      // try to resolve fullName via ps_users if identifier was stored
-      if (lsName && (!lsName.includes(' ') || lsName === u.username || lsName === u.email)) {
-        const users = JSON.parse(localStorage.getItem('ps_users') || '[]');
-        const found = Array.isArray(users)
-          ? users.find(
-              (x) =>
-                safe(x.email).toLowerCase() === lsName.toLowerCase() ||
-                safe(x.username).toLowerCase() === lsName.toLowerCase()
-            )
-          : null;
-        if (found?.fullName) lsName = found.fullName;
-        if (found?.role) lsRole = found.role;
-      }
     } catch {}
 
-    const finalName = fromAuth.name || lsName || 'Admin User';
-    const finalRole = fromAuth.role || lsRole || 'Finance Officer';
+    const finalName = fromAuth.name || fromCached.name || lsName || 'Admin User';
+    const finalRole = fromAuth.role || fromCached.role || lsRole || 'Finance Officer';
     return { displayName: finalName, role: finalRole };
-  }, [user]);
+  }, [user, cachedUser]);
 
   const firstName = useMemo(() => displayName.split(' ').filter(Boolean)[0] || '', [displayName]);
 
@@ -107,8 +122,8 @@ export function Topbar() {
       ? 'Payroll Processing'
       : segment === 'reports'
       ? 'Reports'
-      : ['soldier', 'staff', 'staffs'].includes(segment)
-      ? 'Soldier Management'
+      : ['personnel', 'staff', 'staffs'].includes(segment)
+      ? 'Personnel Management'
       : human(segment);
 
   // handlers
@@ -116,9 +131,11 @@ export function Topbar() {
   
   const handleLogout = () => {
     try { signOut?.(); } catch {}
+    // Tell API to clear HttpOnly cookie (if using cookie auth)
+    fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
     try { localStorage.removeItem('ps_auth'); } catch {}
     setUserOpen(false);
-    navigate('/');
+    navigate('/login');
   };
 
   return (

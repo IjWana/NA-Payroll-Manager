@@ -1,16 +1,15 @@
 from flask import Flask
 from flask_cors import CORS
-from .auth import auth_bp
 from flask_jwt_extended import JWTManager
 from flask_pymongo import PyMongo
 import os
 from dotenv import load_dotenv
-# from server.models.database import init_app
-
-
+from flask_bcrypt import Bcrypt
 
 mongo = PyMongo()
 jwt = JWTManager()
+bcrypt = Bcrypt()
+
 
 def create_app():
     app = Flask(__name__)
@@ -27,8 +26,9 @@ def create_app():
     # Initialize MongoDB and JWT
     mongo.init_app(app)
     jwt.init_app(app)
+    bcrypt.init_app(app)
 
-    # Test Mongo Connection (before blueprints)
+    # Test Mongo Connection
     try:
         with app.app_context():
             mongo.db.command('ping')
@@ -36,21 +36,24 @@ def create_app():
     except Exception as e:
         print(f"\n❌ MongoDB connection failed: {e}\n")
 
-
     # Enable CORS
     CORS(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGIN']}}, supports_credentials=True)
 
-    # Register routes
-    app.register_blueprint(auth_bp, url_prefix="/auth")
-
+    # ✅ Import and register blueprints *AFTER* initializing extensions
+    from .auth import auth_bp
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    print("✅ Auth blueprint imported successfully")
+    print("✅ Auth blueprint registered at /api/auth")
+    
+    
+    # This to show all registered routes
+    # print("\n📜 Registered routes:")
+    # for rule in app.url_map.iter_rules():
+    #  print(rule)
+    #  print()
 
     @app.route('/')
     def home():
-        return "Hello, World!", 200
+        return "MongoDB connected successfully", 200
 
     return app
-
-
-
-
-

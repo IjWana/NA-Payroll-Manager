@@ -17,7 +17,7 @@ const ImageSlideshow = () => {
       setCurrentIndex((prevIndex) =>
         prevIndex === images.length - 1 ? 0 : prevIndex + 1
       );
-    }, 5000); // change image every 5 seconds
+    }, 3000); // change image every 3 seconds
 
     return () => clearInterval(interval); // clean up interval on unmount
   }, []);
