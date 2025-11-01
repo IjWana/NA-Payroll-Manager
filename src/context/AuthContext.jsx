@@ -1,12 +1,13 @@
-import { useLocalStorage } from "@uidotdev/usehooks";
 import { createContext, useContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState("");
-  const [loading, setLoading] = useState(true); // new
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   // Restore user + token on reload
   useEffect(() => {
@@ -41,25 +42,30 @@ export function AuthProvider({ children }) {
       setToken(data.token);
       localStorage.setItem("token", data.token);
       localStorage.setItem("ps_auth", JSON.stringify({ user: data.user }));
+
+      navigate("/dashboard", { replace: true }); // 👈 redirect after login
     } else {
       throw new Error(data.error || "Login failed");
     }
   };
 
-
   // Logout
   const logout = () => {
-    localStorage.clear()
+    localStorage.clear();
+    setUser(null);
+    setToken("");
+    navigate("/login", { replace: true });
   };
 
   const isAuthenticated = !!token;
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, token, isAuthenticated, loading, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthContext);
-

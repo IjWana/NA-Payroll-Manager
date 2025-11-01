@@ -14,7 +14,7 @@ export function Topbar() {
 
   // notifications from context
   const { notifications: items, unreadCount: unread, markAllRead, markRead } = useNotifications();
-  const { user, signOut } = useAuth() || {};
+  const { user, logout } = useAuth() || {};
 
   // local UI state
   const [open, setOpen] = useState(false);
@@ -129,41 +129,10 @@ export function Topbar() {
 
   // handlers
   const navigate = useNavigate();
-  
-  // const handleLogout = () => {
-  //   try { signOut?.(); } catch {}
-  //   // Tell API to clear HttpOnly cookie (if using cookie auth)
-  //   fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
-  //   try { localStorage.removeItem('ps_auth'); } catch {}
-  //   setUserOpen(false);
-  //   navigate('/login');
-  // };
-
 
   const handleLogout = async () => {
-  const token = localStorage.getItem("token");
-
-  try {
-    const res = await fetch("http://localhost:5000/api/auth/logout", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: "include", // support cookies if used
-    });
-
-    if (!res.ok) {
-      console.warn("Logout failed:", res.status);
-    }
-  } catch (err) {
-    console.error("Logout error:", err);
-  } finally {
-    localStorage.removeItem("token");
-    localStorage.removeItem("ps_auth");
-    navigate("/login");
-  }
-};
+    logout()
+  };
 
   return (
     <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4">
@@ -297,6 +266,7 @@ export function Topbar() {
               >
                 <div
                     ref={userMenuRef}
+                    onClick={()=> handleLogout()}
                     role="menu"
                     className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white shadow-lg"
                   >
