@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import { Download, FileDown, Filter } from 'lucide-react';
 
 const RUNS_KEY = 'ps_runs';
@@ -49,18 +48,6 @@ function monthLabel(dOrKey) {
 }
 
 export default function PayrollHistory() {
-  const navigate = useNavigate();
-
-  // Auth gate
-  useEffect(() => {
-    try {
-      const auth = JSON.parse(localStorage.getItem('ps_auth') || '{}');
-      if (!auth?.token) navigate('/', { replace: true });
-    } catch {
-      navigate('/', { replace: true });
-    }
-  }, [navigate]);
-
   const runs = loadRuns();
 
   // Filters

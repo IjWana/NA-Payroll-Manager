@@ -128,18 +128,7 @@ function guessRunDate(r) {
 function isSameMonth(a, b) { return a && b && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear(); }
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-
-  // Guard: allow only authenticated users
-  useEffect(() => {
-    try {
-      const auth = JSON.parse(localStorage.getItem('ps_auth') || '{}');
-      if (!auth?.token) navigate('/login', { replace: true });
-    } catch {
-      navigate('/login', { replace: true });
-    }
-  }, [navigate]);
-
+  
   const { runs } = usePayroll();
   const { staff } = useStaff();
   const { notifications } = useNotifications();
@@ -200,7 +189,7 @@ export default function Dashboard() {
   // Overview cards
   const metrics = [
     {
-      label: 'Total Soldiers',
+      label: 'Total Personnel',
       value: totalStaff,
       footnote: totalStaff ? `${regularPct}% regular` : '—',
       tone: 'bg-emerald-50 text-emerald-700',
@@ -258,9 +247,9 @@ export default function Dashboard() {
       {/* Quick navigation */}
       <div className="flex flex-wrap items-center gap-3">
         <Link
-          to="/soldier"
+          to="/personnel"
           className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm hover:bg-gray-50"
-          title="Add Soldier"
+          title="Add Personnel"
         >
           <UserPlus size={16} /> Add Personnel
         </Link>

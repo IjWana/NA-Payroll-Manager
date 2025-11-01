@@ -1,36 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar, CheckCircle2, RefreshCw, Search, WalletCards, Gift, Sigma } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-const STAFF_KEY = 'ps_staff';
-const RUNS_KEY = 'ps_runs';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api';
 
-function loadStaff() {
-  try {
-    const raw = localStorage.getItem(STAFF_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
-function loadRuns() {
-  try {
-    const raw = localStorage.getItem(RUNS_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
-function saveRuns(runs) {
-  try {
-    localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
-  } catch {}
-}
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
 function formatCurrency(n) {
   const v = Number(n ?? 0);
   if (!Number.isFinite(v)) return '—';
@@ -54,77 +28,159 @@ function monthLabel(ym) {
   return d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
 }
 
+const RESPONSE = {
+  message: 'Payroll fetched successfully',
+    data: {
+      payroll:  [
+        {
+          id: 1,
+          staffId: "EMP001",
+          name: "John Doe",
+          rank: "Captain",
+          department: "Operations",
+          region: "North",
+          basic: 250000,
+          allowance: 50000,
+          net: 295000,
+          status: "paid",
+        },
+        {
+          id: 2,
+          staffId: "EMP002",
+          name: "Jane Smith",
+          rank: "Lieutenant",
+          department: "Intelligence",
+          region: "West",
+          basic: 200000,
+          allowance: 40000,
+          net: 238000,
+          status: "pending",
+        },
+        {
+          id: 3,
+          staffId: "EMP003",
+          name: "Michael Johnson",
+          rank: "Sergeant",
+          department: "Logistics",
+          region: "East",
+          basic: 180000,
+          allowance: 35000,
+          net: 205000,
+          status: "paid",
+        },
+        {
+          id: 4,
+          staffId: "EMP004",
+          name: "Grace Okoro",
+          rank: "Major",
+          department: "Finance",
+          region: "South",
+          basic: 300000,
+          allowance: 70000,
+          net: 340000,
+          status: "paid",
+        },
+        {
+          id: 5,
+          staffId: "EMP005",
+          name: "Samuel Obi",
+          rank: "Corporal",
+          department: "Communications",
+          region: "Central",
+          basic: 150000,
+          allowance: 30000,
+          net: 175000,
+          status: "pending",
+        },
+      ],
+      
+      totals: {
+        gross: 1_253_000,
+        allowances: 225_000,
+        deductions: 57_000,
+     },
+    }
+}
+
 export default function Payroll() {
   const navigate = useNavigate();
-
-  // Auth guard (simple)
-  useEffect(() => {
-    try {
-      const auth = JSON.parse(localStorage.getItem('ps_auth') || '{}');
-      if (!auth?.token) navigate('/login', { replace: true });
-    } catch {
-      navigate('/login', { replace: true });
-    }
-  }, [navigate]);
+  const {logout} = useAuth()
+  const [apiError, setApiError] = useState('');
 
   // Selected month (YYYY-MM)
   const now = new Date();
   const defaultYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [period, setPeriod] = useState(defaultYm);
 
-  // Fetch active personnel
-  const allPersonnel = loadStaff();
-  const personnel = useMemo(
-    () =>
-      allPersonnel.filter(
-        s => String(s?.status || 'Active').toLowerCase() === 'active'
-      ),
-    [allPersonnel]
-  );
-
-  // Build preview entries (auto compute allowance as stored allowance or 10% of basic)
-  const entries = useMemo(() => {
-    return personnel.map((s, idx) => {
-      const basic = Number(s.basicSalary || 0);
-      const allowance = Number.isFinite(Number(s.allowance))
-        ? Number(s.allowance)
-        : Math.round(basic * 0.1);
-      const net = basic + allowance;
-      return {
-        id: s.id || idx,
-        employeeId: s.employeeNo || s.id || String(idx),
-        name: s.fullName || 'Unnamed',
-        rank: s.rank || '',
-        department: s.department || '',
-        region: s.region || '',
-        basic,
-        allowance,
-        net,
-        status: 'pending',
-      };
-    });
-  }, [personnel]);
-
-  // Totals
-  const totals = useMemo(() => {
-    const gross = entries.reduce((n, r) => n + r.net, 0);
-    const allowances = entries.reduce((n, r) => n + r.allowance, 0);
-    return { gross, allowances, deductions: 0, count: entries.length };
-  }, [entries]);
+  // Preview state
+  const [loading, setLoading] = useState(false);
+  const [payrolls, setPayrolls] = useState([]);
+  const [totals, setTotals] = useState({ gross: 0, allowances: 0, deductions: 0, count: 0 });
 
   // Search/sort
   const [q, setQ] = useState('');
   const [sortKey, setSortKey] = useState('name'); // name | department | rank | basic | allowance | net
   const [sortDir, setSortDir] = useState('asc');
+
+  // useEffect(() => {
+  //   const fetchPreview = async () => {
+  //     setApiError('');
+  //     setLoading(true);
+
+  //     try {
+  //       const res = await fetch(`${API_BASE}/payroll/preview?period=${period}`, {
+  //         method: 'GET',
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       });
+
+  //       if (res.status === 401) {
+  //         logout()
+  //         navigate('/login', { replace: true });
+  //         return;
+  //       }
+
+  //       if (!res.ok) {
+  //         setApiError(data?.error || 'Could not load payroll preview.');
+  //         setPayrolls([]);
+  //         setTotals({ gross: 0, allowances: 0, deductions: 0, count: 0 });
+  //         return;
+  //       }
+
+  //       // const data = await res.json()
+  //       const data = RESPONSE.data
+    
+  //       setPayrolls(data.payroll);
+  //       setTotals({ gross: data?.totals?.gross, allowances: data?.totals?.allowances, deductions: data?.totals?.deductions, count: data?.payroll?.length });
+  //     } catch {
+  //       setApiError('Network error while loading preview.');
+  //       setPayrolls([]);
+  //       setTotals({ gross: 0, allowances: 0, deductions: 0, count: 0 });
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   }
+
+  //   fetchPreview()
+  // }, [])
+
+  useEffect(() => {
+     const data = RESPONSE.data
+    
+    setPayrolls(data.payroll);
+    setTotals({ gross: data?.totals?.gross, allowances: data?.totals?.allowances, deductions: data?.totals?.deductions, count: data?.payroll?.length });
+
+  }, [])
+  
+  
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     const base = s
-      ? entries.filter(r =>
+      ? payrolls.filter(r =>
           [r.name, r.department, r.rank, r.region, r.employeeId].some(v =>
             String(v ?? '').toLowerCase().includes(s)
           )
         )
-      : entries;
+      : payrolls;
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...base].sort((a, b) => {
       const A = a[sortKey];
@@ -134,7 +190,7 @@ export default function Payroll() {
       // @ts-ignore
       return x > y ? dir : x < y ? -dir : 0;
     });
-  }, [entries, q, sortKey, sortDir]);
+  }, [payrolls, q, sortKey, sortDir]);
 
   const setSort = key => {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
@@ -144,60 +200,52 @@ export default function Payroll() {
     }
   };
 
-  // Approve payroll -> save to history and navigate to Reports
-  const approve = () => {
-    if (!entries.length) return;
-    const runs = loadRuns();
+  // Approve payroll via API; handle overwrite if run exists
+  const approve = async () => {
+    if (!payrolls.length) return;
 
-    // prevent duplicate approval for same period
-    const label = monthLabel(period);
-    const exists = runs.some(r => r.period === period || r.periodLabel === label);
-    if (exists && !window.confirm('A payroll for this period already exists. Overwrite?')) {
-      return;
-    }
-
-    const run = {
-      id: uid(),
-      period, // YYYY-MM
-      periodLabel: label,
-      status: 'completed',
-      createdAt: new Date().toISOString(),
-      totals,
-      entries: entries.map(e => ({
-        id: e.id,
-        staffId: e.employeeId,
-        name: e.name,
-        department: e.department,
-        rank: e.rank,
-        region: e.region,
-        salaryPaid: e.net,
-        allowance: e.allowance,
-        status: 'paid',
-      })),
-    };
-
-    const next = exists
-      ? runs.map(r => (r.period === period || r.periodLabel === label ? run : r))
-      : [run, ...runs];
-
-    saveRuns(next);
-    // Optional: add a simple "report" record to documents storage
     try {
-      const docsKey = 'ps_docs';
-      const arr = JSON.parse(localStorage.getItem(docsKey) || '[]');
-      arr.unshift({
-        id: uid(),
-        title: `Payroll - ${label}`,
-        type: 'Report',
-        status: 'outbox',
-        createdAt: new Date().toISOString(),
-        size: `${(JSON.stringify(run).length / 1024).toFixed(1)} KB`,
+      setLoading(true);
+      let res = await fetch(`${API_BASE}/payroll/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ period }),
       });
-      localStorage.setItem(docsKey, JSON.stringify(arr));
-    } catch {}
-
-    alert(`Payroll for ${label} approved.`);
-    navigate('/reports', { replace: true });
+      if (res.status === 401) {
+        localStorage.removeItem('ps_auth');
+        navigate('/login', { replace: true });
+        return;
+      }
+      if (res.status === 409) {
+        // run exists; ask user to overwrite
+        const ok = window.confirm('A payroll for this period already exists. Overwrite?');
+        if (!ok) return;
+        res = await fetch(`${API_BASE}/payroll/approve`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ period, overwrite: true }),
+        });
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data?.error || 'Could not approve payroll.');
+        return;
+      }
+      alert(`Payroll for ${monthLabel(period)} approved.`);
+      // If you use the new PayrollHistory page:
+      navigate('/history', { replace: true });
+      // If you still use Reports page, switch to: navigate('/reports', { replace: true });
+    } catch {
+      alert('Network error. Try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -224,20 +272,28 @@ export default function Payroll() {
             onClick={() => setQ('')}
             className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50"
             title="Refresh"
+            disabled={loading}
           >
             <RefreshCw size={16} /> Refresh
           </button>
           <button
             type="button"
             onClick={approve}
-            disabled={!entries.length}
+            disabled={!payrolls.length || loading}
             className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
             title="Approve payroll"
           >
-            <CheckCircle2 size={16} /> Approve Payroll
+            <CheckCircle2 size={16} /> {loading ? 'Processing...' : 'Approve Payroll'}
           </button>
         </div>
       </div>
+
+      {/* API error */}
+      {apiError && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 px-3 py-2 text-sm">
+          {apiError}
+        </div>
+      )}
 
       {/* Overview cards */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -255,7 +311,7 @@ export default function Payroll() {
           </div>
           <div className="mt-2 text-sm text-black">Total Allowances</div>
           <div className="mt-2 text-2xl font-semibold">{formatCurrency(totals.allowances)}</div>
-          <div className="mt-1 text-xs text-black">{entries.length} personnel</div>
+          <div className="mt-1 text-xs text-black">{payrolls.length} personnel</div>
         </div>
         <div className="rounded-lg border p-4 bg-indigo-200 border-gray-200">
           <div className="h-8 w-8 grid place-items-center rounded-md bg-gray-700 text-white">
@@ -284,13 +340,13 @@ export default function Payroll() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
           <input
             className="w-64 rounded-md border pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Search soldiers"
+            placeholder="Search personnel"
             value={q}
             onChange={e => setQ(e.target.value)}
           />
         </div>
         <div className="text-xs text-gray-500 ml-auto">
-          {filtered.length} of {entries.length} shown
+          {filtered.length} of {payrolls.length} shown
         </div>
       </div>
 
@@ -308,9 +364,11 @@ export default function Payroll() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <tr><td colSpan={6} className="py-8 text-center text-gray-500">Loading preview…</td></tr>
+            ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-gray-500">No active soldiers found.</td>
+                <td colSpan={6} className="py-8 text-center text-gray-500">No active personnel found.</td>
               </tr>
             ) : (
               filtered.map(r => (

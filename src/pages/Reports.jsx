@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import {
 
   Timer,
@@ -182,17 +181,6 @@ function DonutChart({ items, total, centerLabel }) {
 }
 
 export default function Reports() {
-  const navigate = useNavigate();
-  // Auth gate
-  useEffect(() => {
-    try {
-      const auth = JSON.parse(localStorage.getItem('ps_auth') || '{}');
-      if (!auth?.token) navigate('/login', { replace: true });
-    } catch {
-      navigate('/login', { replace: true });
-    }
-  }, [navigate]);
-
   // Data source (context or localStorage fallback)
   const { runs: ctxRuns = [] } = usePayroll?.() || { runs: [] };
   const runs = ctxRuns.length ? ctxRuns : loadRunsFallback();

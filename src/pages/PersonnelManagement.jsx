@@ -49,17 +49,6 @@ function initials(name = '') {
   return name.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('') || 'NA';
 }
 
-function useAuthGuard() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    try {
-      const auth = JSON.parse(localStorage.getItem('ps_auth') || '{}');
-      if (!auth?.token) navigate('/login', { replace: true });
-    } catch {
-      navigate('/', { replace: true });
-    }
-  }, [navigate]);
-}
 
 /* Add/Edit Personnel Modal */
 function PersonnelFormModal({ open, onClose, onSave, initial }) {
@@ -306,8 +295,6 @@ function PersonnelProfile({ open, onClose, data }) {
 }
 
 export default function PersonnelManagement() {
-  useAuthGuard();
-
   const [rows, setRows] = useState(loadStaff());
   useEffect(() => saveStaff(rows), [rows]);
 

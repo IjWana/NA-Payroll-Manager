@@ -41,7 +41,15 @@ def create_app():
 
     # ✅ Import and register blueprints *AFTER* initializing extensions
     from .auth import auth_bp
+    # from .routes.payroll import payroll_bp
+    # from .routes.personnel import personnel_bp
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    # app.register_blueprint(payroll_bp, url_prefix="/api/payroll")
+    # app.register_blueprint(personnel_bp, )
+
+
+    
+    
     print("✅ Auth blueprint imported successfully")
     print("✅ Auth blueprint registered at /api/auth")
     
